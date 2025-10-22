@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>中秋盲盒互动游戏</title>
+  <script src="https://unpkg.com/@tailwindcss/browser@4"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" rel="stylesheet">index.html
+  <style type="text/tailwindcss">
+    @theme {
+      --color-primary: #ef4444;
+      --color-secondary: #f59e0b;
+      --color-dark: #111827;
+      --font-inter: 'Inter', sans-serif;
+    }
+    .blind-box {
+      perspective: 1000px;
+      width: 150px;
+      height: 200px;
+      margin: 10px;
+      cursor: pointer;
+    }
+    .box-inner {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      transition: transform 0.6s;
+      transform-style: preserve-3d;
+    }
+    .box-front, .box-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      backface-visibility: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 8px;
+    }
+    .box-front {
+      background-color: var(--color-primary);
+      border: 4px solid var(--color-secondary);
+    }
+    .box-back {
+      transform: rotateY(180deg);
+      background-color: #fff;
+      border: 4px solid var(--color-secondary);
+    }
+    .drop-zone {
+      width: 120px;
+      height: 80px;
+      border: 2px dashed var(--color-dark);
+      margin: 10px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      border-radius: 4px;
+    }
+    .drop-zone-active {
+      border-color: var(--color-primary);
+      background-color: rgba(239, 68, 68, 0.1);
+    }
+    .draggable {
+      cursor: move;
+      max-width: 100px;
+      max-height: 60px;
+    }
+    .text-label {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--color-dark);
+    }
+    .form-input {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #d1d5db;
+      border-radius: 0.375rem;
+    }
+    .recorder-btn {
+      background-color: #3b82f6;
+      color: white;
+      padding: 0.25rem 0.75rem;
+      border-radius: 0.25rem;
+      font-size: 0.875rem;
+      margin-left: 0.5rem;
+    }
+    .recorder-btn:disabled {
+      background-color: #94a3b8;
+      cursor: not-allowed;
+    }
+    /* 精简模态框布局，确保内容同屏显示 */
+    #contentManagerModal .modal-content {
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 1.5rem;
+    }
+    .content-section {
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid #eee;
+    }
+    .content-section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    .media-item {
+      margin-bottom: 1rem;
+    }
+    .media-item label {
+      font-size: 0.9rem;
+      margin-bottom: 0.3rem;
+    }
+    .preview-btn {
+      margin-top: 0.5rem;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.8rem;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center justify-center p-4 font-inter">
+  <h1 class="text-3xl font-bold text-primary mb-8">中秋盲盒互动游戏</h1>
+  <!-- 盲盒区域 -->
+  <div class="flex flex-wrap justify-center mb-8" id="blindBoxes"></div>
+  <!-- 拖放区域 -->
+  <div class="flex flex-col items-center mb-8">
+    <div class="flex mb-4">
+      <div class="drop-zone" id="zone1" data-target="八月十五"></div>
+      <div class="drop-zone" id="zone2" data-target="中秋节"></div>
+    </div>
+    <div class="flex mb-4 items-center">
+      <span class="text-label mr-2">赏</span>
+      <div class="drop-zone" id="zone3" data-target="赏月亮"></div>
+      <span class="text-label mx-8">吃</span>
+      <div class="drop-zone" id="zone4" data-target="吃月饼"></div>
+    </div>
+    <div class="drop-zone" id="zone5" data-target="全家乐团圆"></div>
+  </div>
+  <!-- 功能按钮区域 -->
+  <div class="flex flex-col items-center mb-8">
+    <div class="flex gap-4 mb-4">
+      <button id="restartBtn" class="bg-dark text-white px-4 py-2 rounded-md">
+        <i class="fas fa-redo mr-2"></i>重新开始
+      </button>
+      <button id="contentManagerBtn" class="bg-secondary text-white px-4 py-2 rounded-md">
+        <i class="fas fa-cog mr-2"></i>内容管理
+      </button>
+      <button id="readSentenceBtn" class="bg-primary text-white px-4 py-2 rounded-md" disabled>
+        <i class="fas fa-volume-up mr-2"></i>播放朗读音频
+      </button>
+    </div>
+  </div>
+  <!-- 内容管理模态框（精简版） -->
+  <div id="contentManagerModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-white rounded-lg w-4/5 max-w-xl modal-content">
+      <h2 class="text-2xl font-bold mb-4">内容管理</h2>
+      
+      <!-- 1. 盲盒内容修改（精简标签，紧凑布局） -->
+      <div class="content-section">
+        <h3 class="text-lg font-semibold mb-2 text-dark">1. 盲盒内容</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <!-- 盲盒1（文本） -->
+          <div class="media-item">
+            <label class="block font-medium">盲盒1（文本）</label>
+            <input type="text" id="box1Text" class="form-input" placeholder="输入文本（如：八月十五）" value="八月十五">
+          </div>
+          <!-- 盲盒2（中秋节图片） -->
+          <div class="media-item">
+            <label class="block font-medium">盲盒2（中秋图）</label>
+            <input type="file" id="box2Img" accept="image/*" class="form-input">
+            <img id="box2Preview" src="中秋节.jpg" alt="中秋预览" class="mt-2 max-w-16 max-h-16">
+          </div>
+          <!-- 盲盒3（月亮图片） -->
+          <div class="media-item">
+            <label class="block font-medium">盲盒3（月亮图）</label>
+            <input type="file" id="box3Img" accept="image/*" class="form-input">
+            <img id="box3Preview" src="月亮.jpg" alt="月亮预览" class="mt-2 max-w-16 max-h-16">
+          </div>
+          <!-- 盲盒4（月饼图片） -->
+          <div class="media-item">
+            <label class="block font-medium">盲盒4（月饼图）</label>
+            <input type="file" id="box4Img" accept="image/*" class="form-input">
+            <img id="box4Preview" src="月饼.jpg" alt="月饼预览" class="mt-2 max-w-16 max-h-16">
+          </div>
+        </div>
+      </div>
+      
+      <!-- 2. 音频设置（删除视频，精简描述） -->
+      <div class="content-section">
+        <h3 class="text-lg font-semibold mb-2 text-dark">2. 音频管理</h3>
+        <div class="grid grid-cols-1 gap-3">
+          <!-- 朗读音频1 -->
+          <div class="media-item">
+            <label class="block font-medium">① 朗读音频（八月十五中秋节）</label>
+            <input type="file" id="audio1" accept="audio/*" class="form-input">
+            <button id="playAudio1" class="bg-gray-200 text-dark rounded text-sm preview-btn">预览音频</button>
+          </div>
+          <!-- 朗读音频2 -->
+          <div class="media-item">
+            <label class="block font-medium">② 朗读音频（赏月亮，吃月饼）</label>
+            <input type="file" id="audio2" accept="audio/*" class="form-input">
+            <button id="playAudio2" class="bg-gray-200 text-dark rounded text-sm preview-btn">预览音频</button>
+          </div>
+          <!-- 朗读音频3 -->
+          <div class="media-item">
+            <label class="block font-medium">③ 朗读音频（全家乐团圆）</label>
+            <input type="file" id="audio3" accept="audio/*" class="form-input">
+            <button id="playAudio3" class="bg-gray-200 text-dark rounded text-sm preview-btn">预览音频</button>
+          </div>
+          <!-- 鼓励音效 -->
+          <div class="media-item p-2 border rounded-md bg-gray-50">
+            <label class="block font-medium">④ 鼓励音效（支持录音/上传）</label>
+            <div class="flex flex-wrap gap-2 mt-1">
+              <input type="file" id="praiseAudio" accept="audio/*" class="form-input">
+              <button id="recordPraiseBtn" class="recorder-btn">
+                <i class="fas fa-microphone mr-1"></i>录音
+              </button>
+              <button id="stopRecordPraiseBtn" class="recorder-btn" disabled>
+                <i class="fas fa-stop mr-1"></i>停止
+              </button>
+            </div>
+            <button id="playPraiseAudio" class="bg-gray-200 text-dark rounded text-sm preview-btn">预览音效</button>
+          </div>
+          <!-- 盲盒打开音效 -->
+          <div class="media-item">
+            <label class="block font-medium">⑤ 盲盒打开音效</label>
+            <input type="file" id="boxOpenAudio" accept="audio/*" class="form-input">
+            <button id="playOpenAudio" class="bg-gray-200 text-dark rounded text-sm preview-btn">预览音效</button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 保存/取消按钮 -->
+      <div class="flex justify-end gap-3 mt-2">
+        <button id="cancelContentBtn" class="bg-gray-300 text-dark px-4 py-2 rounded-md">取消</button>
+        <button id="saveContentBtn" class="bg-primary text-white px-4 py-2 rounded-md">保存修改</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 1. 基础配置：默认内容（1文本+3图片）
+    const defaultContents = [
+      { type: 'text', content: '八月十五', id: 'text1', src: '', alt: '文本-八月十五' },
+      { type: 'image', src: '中秋节.jpg', alt: '中秋节', id: 'img1' },
+      { type: 'image', src: '月亮.jpg', alt: '月亮', id: 'img2' },
+      { type: 'image', src: '月饼.jpg', alt: '月饼', id: 'img3' }
+    ];
+    // 2. 本地存储：保留音频+鼓励音效字段（删除视频相关）
+    let customContents = JSON.parse(localStorage.getItem('midAutumnCustomContents')) || [...defaultContents];
+    let customMedia = JSON.parse(localStorage.getItem('midAutumnCustomMedia')) || {
+      audio1: null,
+      audio2: null,
+      audio3: null,
+      praiseAudio: null,
+      boxOpenAudio: null,
+      recordBlobs: {}
+    };
+    // 3. 全局状态
+    let droppedItems = {};
+    let mediaRecorders = {};
+    const readSentenceBtn = document.getElementById('readSentenceBtn');
+    // 4. DOM元素获取
+    const blindBoxes = document.getElementById('blindBoxes');
+    const restartBtn = document.getElementById('restartBtn');
+    const contentManagerBtn = document.getElementById('contentManagerBtn');
+    const contentManagerModal = document.getElementById('contentManagerModal');
+    const cancelContentBtn = document.getElementById('cancelContentBtn');
+    const saveContentBtn = document.getElementById('saveContentBtn');
+    const zone5 = document.getElementById('zone5');
+    const recordPraiseBtn = document.getElementById('recordPraiseBtn');
+    const stopRecordPraiseBtn = document.getElementById('stopRecordPraiseBtn');
+    const playPraiseAudioBtn = document.getElementById('playPraiseAudio');
+
+    // ------------------------------
+    // 核心功能：盲盒随机排序（不变）
+    // ------------------------------
+    function shuffleArray(arr) {
+      const newArr = [...arr];
+      for (let i = newArr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [newArr[i], newArr[j]] = [newArr[j], newArr[i]];
+      }
+      return newArr;
+    }
+
+    function createBlindBoxes() {
+      blindBoxes.innerHTML = '';
+      const shuffledContents = shuffleArray(customContents);
+      
+      shuffledContents.forEach((content, index) => {
+        const box = document.createElement('div');
+        box.className = 'blind-box';
+        
+        let contentHtml = '';
+        if (content.type === 'text') {
+          contentHtml = `<span class="text-lg font-bold">${content.content}</span>`;
+        } else {
+          contentHtml = `<img src="${content.src}" alt="${content.alt}" class="draggable" draggable="true" 
+            data-id="${content.id}" data-target="${getTargetByAlt(content.alt)}">`;
+        }
+        
+        box.innerHTML = `
+          <div class="box-inner" data-index="${index}">
+            <div class="box-front"><i class="fas fa-gift text-4xl text-secondary"></i></div>
+            <div class="box-back" id="boxBack${index}">${contentHtml}</div>
+          </div>
+        `;
+        blindBoxes.appendChild(box);
+        box.addEventListener('click', () => openBox(index, shuffledContents));
+      });
+    }
+
+    // ------------------------------
+    // 拖放渲染（不变）
+    // ------------------------------
+    function renderDroppedContent(zone, target) {
+      zone.innerHTML = '';
+      if (target === '八月十五' || target === '全家乐团圆') {
+        zone.innerHTML = `<span class="text-lg font-bold">${target}</span>`;
+      } else {
+        let imgItem = null;
+        if (target === '中秋节') imgItem = customContents.find(item => item.alt === '中秋节');
+        if (target === '赏月亮') imgItem = customContents.find(item => item.alt === '月亮');
+        if (target === '吃月饼') imgItem = customContents.find(item => item.alt === '月饼');
+        
+        const imgSrc = imgItem ? imgItem.src : '';
+        zone.innerHTML = `<img src="${imgSrc}" alt="${target}" class="draggable" style="max-width:100px; max-height:70px">`;
+      }
+    }
+
+    // ------------------------------
+    // 盲盒打开（不变）
+    // ------------------------------
+    function openBox(index, shuffledContents) {
+      const boxInner = document.querySelector(`.box-inner[data-index="${index}"]`);
+      boxInner.style.transform = 'rotateY(180deg)';
+      
+      if (customMedia.boxOpenAudio) {
+        new Audio(customMedia.boxOpenAudio).play().catch(err => console.log('音效播放失败：', err));
+      }
+      
+      const content = shuffledContents[index];
+      if (content.type === 'image') {
+        const img = document.querySelector(`#boxBack${index} img`);
+        img.addEventListener('dragstart', (e) => {
+          e.dataTransfer.setData('text/plain', img.dataset.id);
+          e.dataTransfer.setData('text/target', img.dataset.target);
+        });
+      } else {
+        const span = document.querySelector(`#boxBack${index} span`);
+        span.setAttribute('draggable', 'true');
+        span.addEventListener('dragstart', (e) => {
+          e.dataTransfer.setData('text/plain', content.id);
+          e.dataTransfer.setData('text/target', content.content);
+        });
+      }
+    }
+
+    // ------------------------------
+    // 内容管理模态框（精简版，删除视频逻辑）
+    // ------------------------------
+    function initContentManager() {
+      const box1Text = document.getElementById('box1Text');
+      const box2Img = document.getElementById('box2Img');
+      const box3Img = document.getElementById('box3Img');
+      const box4Img = document.getElementById('box4Img');
+      const box2Preview = document.getElementById('box2Preview');
+      const box3Preview = document.getElementById('box3Preview');
+      const box4Preview = document.getElementById('box4Preview');
+      const audio1 = document.getElementById('audio1');
+      const audio2 = document.getElementById('audio2');
+      const audio3 = document.getElementById('audio3');
+      const praiseAudioInput = document.getElementById('praiseAudio');
+      const boxOpenAudio = document.getElementById('boxOpenAudio');
+
+      // 打开模态框：按alt查找内容
+      contentManagerBtn.addEventListener('click', () => {
+        // 加载文本内容
+        const textItem = customContents.find(item => item.type === 'text');
+        box1Text.value = textItem ? textItem.content : '八月十五';
+        
+        // 加载图片预览
+        const midAutumnItem = customContents.find(item => item.alt === '中秋节');
+        const moonItem = customContents.find(item => item.alt === '月亮');
+        const cakeItem = customContents.find(item => item.alt === '月饼');
+        box2Preview.src = midAutumnItem ? midAutumnItem.src : '中秋节.jpg';
+        box3Preview.src = moonItem ? moonItem.src : '月亮.jpg';
+        box4Preview.src = cakeItem ? cakeItem.src : '月饼.jpg';
+        
+        // 加载音频状态
+        document.getElementById('playAudio1').dataset.audioUrl = customMedia.audio1 || '';
+        document.getElementById('playAudio2').dataset.audioUrl = customMedia.audio2 || '';
+        document.getElementById('playAudio3').dataset.audioUrl = customMedia.audio3 || '';
+        playPraiseAudioBtn.dataset.audioUrl = customMedia.praiseAudio || '';
+        
+        contentManagerModal.classList.remove('hidden');
+        initAudioPreview();
+        initPraiseRecorder();
+      });
+
+      // 关闭模态框
+      cancelContentBtn.addEventListener('click', () => {
+        contentManagerModal.classList.add('hidden');
+        [box2Img, box3Img, box4Img, audio1, audio2, audio3, praiseAudioInput, boxOpenAudio].forEach(el => el.value = '');
+        Object.values(mediaRecorders).forEach(recorder => recorder.stop());
+      });
+
+      // 图片上传预览
+      box2Img.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) updateMediaPreview(e, box2Preview, '中秋节');
+      });
+      box3Img.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) updateMediaPreview(e, box3Preview, '月亮');
+      });
+      box4Img.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) updateMediaPreview(e, box4Preview, '月饼');
+      });
+
+      // 鼓励音效上传预览
+      praiseAudioInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const audioUrl = URL.createObjectURL(file);
+          customMedia.praiseAudio = audioUrl;
+          playPraiseAudioBtn.dataset.audioUrl = audioUrl;
+        }
+      });
+
+      // 保存修改（删除视频相关逻辑）
+      saveContentBtn.addEventListener('click', () => {
+        // 保存文本内容
+        const textItem = customContents.find(item => item.type === 'text');
+        if (textItem) textItem.content = box1Text.value.trim() || '八月十五';
+        
+        // 保存三句话音频
+        if (audio1.files[0]) customMedia.audio1 = URL.createObjectURL(audio1.files[0]);
+        if (audio2.files[0]) customMedia.audio2 = URL.createObjectURL(audio2.files[0]);
+        if (audio3.files[0]) customMedia.audio3 = URL.createObjectURL(audio3.files[0]);
+        
+        // 保存鼓励音效
+        if (praiseAudioInput.files[0]) customMedia.praiseAudio = URL.createObjectURL(praiseAudioInput.files[0]);
+        
+        // 保存盲盒打开音效
+        if (boxOpenAudio.files[0]) customMedia.boxOpenAudio = URL.createObjectURL(boxOpenAudio.files[0]);
+        
+        // 存入本地存储
+        localStorage.setItem('midAutumnCustomContents', JSON.stringify(customContents));
+        localStorage.setItem('midAutumnCustomMedia', JSON.stringify(customMedia));
+        contentManagerModal.classList.add('hidden');
+        restartGame();
+        alert('修改已保存！刷新页面后仍保留');
+      });
+    }
+
+    // ------------------------------
+    // 辅助函数：按alt更新图片预览（不变）
+    // ------------------------------
+    function updateMediaPreview(e, previewEl, targetAlt) {
+      const file = e.target.files[0];
+      if (file) {
+        const url = URL.createObjectURL(file);
+        previewEl.src = url;
+        const targetItem = customContents.find(item => item.alt === targetAlt);
+        if (targetItem) targetItem.src = url;
+      }
+    }
+
+    // ------------------------------
+    // 原有核心功能：鼓励音效、音频播放、拖放等（不变）
+    // ------------------------------
+    function startPraiseRecording() {
+      Object.values(mediaRecorders).forEach(recorder => recorder.stop());
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          const mediaRecorder = new MediaRecorder(stream);
+          const audioChunks = [];
+          mediaRecorder.addEventListener('dataavailable', event => audioChunks.push(event.data));
+          mediaRecorder.addEventListener('stop', () => {
+            const audioBlob = new Blob(audioChunks, { type: 'audio/mpeg' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            customMedia.praiseAudio = audioUrl;
+            customMedia.recordBlobs.praiseAudio = audioUrl;
+            stream.getTracks().forEach(track => track.stop());
+          });
+          mediaRecorders.praise = mediaRecorder;
+          mediaRecorder.start();
+          recordPraiseBtn.disabled = true;
+          stopRecordPraiseBtn.disabled = false;
+        })
+        .catch(err => {
+          console.error('录音权限获取失败：', err);
+          alert('请允许麦克风权限后再尝试录音');
+          recordPraiseBtn.disabled = false;
+          stopRecordPraiseBtn.disabled = true;
+        });
+    }
+
+    function stopPraiseRecording() {
+      if (mediaRecorders.praise) {
+        mediaRecorders.praise.stop();
+        delete mediaRecorders.praise;
+      }
+      recordPraiseBtn.disabled = false;
+      stopRecordPraiseBtn.disabled = true;
+    }
+
+    function initPraiseRecorder() {
+      recordPraiseBtn.addEventListener('click', startPraiseRecording);
+      stopRecordPraiseBtn.addEventListener('click', stopPraiseRecording);
+    }
+
+    function initAudioPreview() {
+      document.getElementById('playAudio1').addEventListener('click', () => playPreviewAudio(customMedia.audio1, '第一句音频'));
+      document.getElementById('playAudio2').addEventListener('click', () => playPreviewAudio(customMedia.audio2, '第二句音频'));
+      document.getElementById('playAudio3').addEventListener('click', () => playPreviewAudio(customMedia.audio3, '第三句音频'));
+      playPraiseAudioBtn.addEventListener('click', () => {
+        if (customMedia.praiseAudio) new Audio(customMedia.praiseAudio).play().catch(() => alert('鼓励音效预览失败'));
+        else alert('暂无鼓励音效，请先上传或录音');
+      });
+      document.getElementById('playOpenAudio').addEventListener('click', () => {
+        if (customMedia.boxOpenAudio) new Audio(customMedia.boxOpenAudio).play().catch(() => alert('音效预览失败'));
+        else alert('暂无音效，请先上传');
+      });
+    }
+
+    function playPreviewAudio(audioUrl, audioName) {
+      if (audioUrl) new Audio(audioUrl).play().catch(() => alert(`${audioName}预览失败`));
+      else alert(`暂无${audioName}，请先上传`);
+    }
+
+    function playReadSentences() {
+      document.querySelectorAll('audio').forEach(audio => audio.pause());
+      if (customMedia.audio1) {
+        const audio1 = new Audio(customMedia.audio1);
+        audio1.play();
+        audio1.onended = () => {
+          if (customMedia.audio2) {
+            const audio2 = new Audio(customMedia.audio2);
+            audio2.play();
+            audio2.onended = () => {
+              if (customMedia.audio3) new Audio(customMedia.audio3).play();
+            };
+          }
+        };
+      }
+    }
+
+    function checkSentenceComplete() {
+      const isComplete = Object.keys(droppedItems).length === 5;
+      if (isComplete) {
+        readSentenceBtn.disabled = false;
+        if (customMedia.praiseAudio) {
+          setTimeout(() => {
+            new Audio(customMedia.praiseAudio).play().catch(err => {
+              console.log('鼓励音效播放失败：', err);
+              alert('鼓励音效播放失败');
+            });
+          }, 500);
+        }
+      } else {
+        readSentenceBtn.disabled = true;
+      }
+    }
+
+    function initDropZones() {
+      const dropZones = document.querySelectorAll('.drop-zone');
+      dropZones.forEach(zone => {
+        zone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          zone.classList.add('drop-zone-active');
+        });
+        zone.addEventListener('dragleave', () => {
+          zone.classList.remove('drop-zone-active');
+        });
+        zone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          zone.classList.remove('drop-zone-active');
+          const target = e.dataTransfer.getData('text/target');
+          if (zone.dataset.target === target) {
+            renderDroppedContent(zone, target);
+            droppedItems[target] = true;
+            checkSentenceComplete();
+          }
+        });
+      });
+      zone5.addEventListener('click', () => {
+        if (Object.keys(droppedItems).length === 4) {
+          renderDroppedContent(zone5, '全家乐团圆');
+          droppedItems['全家乐团圆'] = true;
+          checkSentenceComplete();
+        }
+      });
+    }
+
+    function restartGame() {
+      droppedItems = {};
+      createBlindBoxes();
+      document.querySelectorAll('.drop-zone').forEach(zone => zone.innerHTML = '');
+      document.querySelectorAll('audio').forEach(media => media.pause());
+      readSentenceBtn.disabled = true;
+    }
+
+    function getTargetByAlt(alt) {
+      if (alt === '中秋节') return '中秋节';
+      if (alt === '月亮') return '赏月亮';
+      if (alt === '月饼') return '吃月饼';
+      if (alt === '文本-八月十五') return '八月十五';
+      return '';
+    }
+
+    // ------------------------------
+    // 初始化游戏
+    // ------------------------------
+    createBlindBoxes();
+    initDropZones();
+    initContentManager();
+    restartBtn.addEventListener('click', restartGame);
+    readSentenceBtn.addEventListener('click', playReadSentences);
+  </script>
+</body>
+</html>
